@@ -55,10 +55,6 @@ class MessageRouter private constructor(
         }
     }
 
-    fun sendDeliveryAck(messageID: String, toPeerID: String) {
-        // Mesh delivery ACKs are sent by the receiver automatically
-    }
-
     fun sendFavoriteNotification(toPeerID: String, isFavorite: Boolean) {
         if (mesh.getPeerInfo(toPeerID)?.isConnected == true) {
             val content = if (isFavorite) "[FAVORITED]" else "[UNFAVORITED]"
@@ -93,11 +89,6 @@ class MessageRouter private constructor(
     // Flush everything (rarely used)
     fun flushAllOutbox() {
         outbox.snapshot().keys.forEach { flushOutboxFor(it) }
-    }
-
-    private fun hexToBytes(hex: String): ByteArray {
-        val clean = if (hex.length % 2 == 0) hex else "0$hex"
-        return clean.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     }
 
     private fun resolveMeshPeerForNoiseHex(noiseHex: String): String? {

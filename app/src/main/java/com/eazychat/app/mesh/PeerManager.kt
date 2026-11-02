@@ -69,6 +69,14 @@ class PeerManager {
         private const val TAG = "PeerManager"
 
         /**
+         * Single online predicate shared by [activePeerIDs] and isPeerActive, so both
+         * agree on what "online" means.
+         */
+        internal fun isOnline(peer: PeerInfo, now: Long, staleAfterMs: Long): Boolean {
+            return (now - peer.lastSeen) <= staleAfterMs && peer.isConnected
+        }
+
+        /**
          * Single source of truth for "online": peers still flagged connected and seen
          * within [staleAfterMs]. Announcements keep this list fresh across multi-hop
          * paths, so it counts reachable mesh nodes rather than direct BLE neighbours.
@@ -78,7 +86,7 @@ class PeerManager {
             now: Long,
             staleAfterMs: Long
         ): List<String> {
-            return peers.filterValues { (now - it.lastSeen) <= staleAfterMs && it.isConnected }
+            return peers.filterValues { isOnline(it, now, staleAfterMs) }
                 .keys
                 .toList()
                 .sorted()
@@ -313,8 +321,7 @@ class PeerManager {
      */
     fun isPeerActive(peerID: String): Boolean {
         val info = peers[peerID] ?: return false
-        val now = System.currentTimeMillis()
-        return (now - info.lastSeen) <= stalePeerTimeoutMs && info.isConnected
+        return isOnline(info, System.currentTimeMillis(), stalePeerTimeoutMs)
     }
     
     /**

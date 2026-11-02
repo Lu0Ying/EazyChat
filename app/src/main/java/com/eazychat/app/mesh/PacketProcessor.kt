@@ -147,7 +147,6 @@ class PacketProcessor(private val myPeerID: String) {
             MessageType.FILE_TRANSFER -> handleMessage(routed) // treat same routing path; parsing happens in handler
             MessageType.LEAVE -> handleLeave(routed)
             MessageType.FRAGMENT -> handleFragment(routed)
-            MessageType.REQUEST_SYNC -> handleRequestSync(routed)
             else -> {
                 // Handle private packet types (address check required)
                 if (packetRelayManager.isPacketAddressedToMe(packet)) {
@@ -241,15 +240,6 @@ class PacketProcessor(private val myPeerID: String) {
     }
 
     /**
-     * Handle REQUEST_SYNC packets (public, TTL=1)
-     */
-    private suspend fun handleRequestSync(routed: RoutedPacket) {
-        val peerID = routed.peerID ?: "unknown"
-        Log.d(TAG, "Processing REQUEST_SYNC from ${formatPeerForLog(peerID)}")
-        delegate?.handleRequestSync(routed)
-    }
-    
-    /**
      * Handle delivery acknowledgment
      */
 //    private suspend fun handleDeliveryAck(routed: RoutedPacket) {
@@ -321,10 +311,8 @@ interface PacketProcessorDelegate {
     fun handleMessage(routed: RoutedPacket)
     fun handleLeave(routed: RoutedPacket)
     fun handleFragment(packet: BitchatPacket): BitchatPacket?
-    fun handleRequestSync(routed: RoutedPacket)
     
     // Communication
     fun sendAnnouncementToPeer(peerID: String)
-    fun sendCachedMessages(peerID: String)
     fun relayPacket(routed: RoutedPacket)
 }

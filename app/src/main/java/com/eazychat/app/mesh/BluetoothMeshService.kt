@@ -26,7 +26,6 @@ import kotlin.random.Random
  * - PeerManager: Peer lifecycle management
  * - FragmentManager: Message fragmentation and reassembly  
  * - SecurityManager: Security, duplicate detection, encryption
- * - StoreForwardManager: Offline message caching
  * - MessageHandler: Message type processing and relay logic
  * - BluetoothConnectionManager: BLE connections and GATT operations
  * - PacketProcessor: Incoming packet routing
@@ -46,7 +45,6 @@ class BluetoothMeshService(private val context: Context) {
     private val peerManager = PeerManager()
     private val fragmentManager = FragmentManager()
     private val securityManager = SecurityManager(encryptionService, myPeerID)
-    private val storeForwardManager = StoreForwardManager()
     private val messageHandler = MessageHandler(myPeerID, context.applicationContext)
     internal val connectionManager = BluetoothConnectionManager(context, myPeerID, fragmentManager) // Made internal for access
     private val packetProcessor = PacketProcessor(myPeerID)
@@ -132,13 +130,10 @@ class BluetoothMeshService(private val context: Context) {
         // SecurityManager delegate for key exchange notifications
         securityManager.delegate = object : SecurityManagerDelegate {
             override fun onKeyExchangeCompleted(peerID: String, peerPublicKeyData: ByteArray) {
-                // Send announcement and cached messages after key exchange
+                // Send announcement after key exchange
                 serviceScope.launch {
                     delay(100)
                     sendAnnouncementToPeer(peerID)
-                    
-                    delay(1000)
-                    storeForwardManager.sendCachedMessages(peerID)
                 }
             }
             
@@ -161,21 +156,6 @@ class BluetoothMeshService(private val context: Context) {
             
             override fun getPeerInfo(peerID: String): PeerInfo? {
                 return peerManager.getPeerInfo(peerID)
-            }
-        }
-        
-        // StoreForwardManager delegates
-        storeForwardManager.delegate = object : StoreForwardManagerDelegate {
-            override fun isFavorite(peerID: String): Boolean {
-                return delegate?.isFavorite(peerID) ?: false
-            }
-            
-            override fun isPeerOnline(peerID: String): Boolean {
-                return peerManager.isPeerActive(peerID)
-            }
-            
-            override fun sendPacket(packet: BitchatPacket) {
-                connectionManager.broadcastPacket(RoutedPacket(packet))
             }
         }
         
@@ -406,16 +386,8 @@ class BluetoothMeshService(private val context: Context) {
                 return fragmentManager.handleFragment(packet)
             }
             
-            override fun handleRequestSync(routed: RoutedPacket) {
-                // Simplified implementation - no sync functionality
-            }
-            
             override fun sendAnnouncementToPeer(peerID: String) {
                 this@BluetoothMeshService.sendAnnouncementToPeer(peerID)
-            }
-            
-            override fun sendCachedMessages(peerID: String) {
-                storeForwardManager.sendCachedMessages(peerID)
             }
             
             override fun relayPacket(routed: RoutedPacket) {
@@ -521,7 +493,6 @@ class BluetoothMeshService(private val context: Context) {
             peerManager.shutdown()
             fragmentManager.shutdown()
             securityManager.shutdown()
-            storeForwardManager.shutdown()
             messageHandler.shutdown()
             packetProcessor.shutdown()
             
@@ -1034,8 +1005,6 @@ class BluetoothMeshService(private val context: Context) {
             appendLine()
             appendLine(securityManager.getDebugInfo())
             appendLine()
-            appendLine(storeForwardManager.getDebugInfo())
-            appendLine()
             appendLine(messageHandler.getDebugInfo())
             appendLine()
             appendLine(packetProcessor.getDebugInfo())
@@ -1100,7 +1069,6 @@ class BluetoothMeshService(private val context: Context) {
         try {
             // Clear all managers
             fragmentManager.clearAllFragments()
-            storeForwardManager.clearAllCache()
             securityManager.clearAllData()
             peerManager.clearAllPeers()
             peerManager.clearAllFingerprints()
