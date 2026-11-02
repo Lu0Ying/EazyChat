@@ -67,6 +67,22 @@ class PeerManager {
     
     companion object {
         private const val TAG = "PeerManager"
+
+        /**
+         * Single source of truth for "online": peers still flagged connected and seen
+         * within [staleAfterMs]. Announcements keep this list fresh across multi-hop
+         * paths, so it counts reachable mesh nodes rather than direct BLE neighbours.
+         */
+        internal fun activePeerIDs(
+            peers: Map<String, PeerInfo>,
+            now: Long,
+            staleAfterMs: Long
+        ): List<String> {
+            return peers.filterValues { (now - it.lastSeen) <= staleAfterMs && it.isConnected }
+                .keys
+                .toList()
+                .sorted()
+        }
     }
 
     // Centralized timeout from AppConstants
@@ -74,7 +90,7 @@ class PeerManager {
     
     // Peer tracking data - enhanced with verification status
     private val peers = ConcurrentHashMap<String, PeerInfo>() // peerID -> PeerInfo
-    private val peerRSSI = ConcurrentHashMap<String, Int>()
+    private val rssiCache = RssiCache(com.eazychat.app.util.AppConstants.Mesh.RSSI_STALE_TIMEOUT_MS)
     private val announcedPeers = CopyOnWriteArrayList<String>()
     private val announcedToPeers = CopyOnWriteArrayList<String>()
     
@@ -255,7 +271,7 @@ class PeerManager {
      */
     fun removePeer(peerID: String, notifyDelegate: Boolean = true) {
         val removed = peers.remove(peerID)
-        peerRSSI.remove(peerID)
+        rssiCache.remove(peerID)
         announcedPeers.remove(peerID)
         announcedToPeers.remove(peerID)
         
@@ -273,9 +289,7 @@ class PeerManager {
      * Update peer RSSI
      */
     fun updatePeerRSSI(peerID: String, rssi: Int) {
-        if (peerID != "unknown") {
-            peerRSSI[peerID] = rssi
-        }
+        rssiCache.update(peerID, rssi)
     }
     
     /**
@@ -321,18 +335,14 @@ class PeerManager {
      * Get all peer RSSI values
      */
     fun getAllPeerRSSI(): Map<String, Int> {
-        return peerRSSI.toMap()
+        return rssiCache.snapshot()
     }
     
     /**
      * Get list of active peer IDs
      */
     fun getActivePeerIDs(): List<String> {
-        val now = System.currentTimeMillis()
-        return peers.filterValues { (now - it.lastSeen) <= stalePeerTimeoutMs && it.isConnected }
-            .keys
-            .toList()
-            .sorted()
+        return activePeerIDs(peers, System.currentTimeMillis(), stalePeerTimeoutMs)
     }
     
     /**
@@ -347,7 +357,7 @@ class PeerManager {
      */
     fun clearAllPeers() {
         peers.clear()
-        peerRSSI.clear()
+        rssiCache.clear()
         announcedPeers.clear()
         announcedToPeers.clear()
         
@@ -368,7 +378,7 @@ class PeerManager {
             appendLine("Active Peers: ${activeIds.size}")
             peers.forEach { (peerID, info) ->
                 val timeSince = (now - info.lastSeen) / 1000
-                val rssi = peerRSSI[peerID]?.let { "${it} dBm" } ?: "No RSSI"
+                val rssi = rssiCache.value(peerID)?.let { "${it} dBm" } ?: "No RSSI"
                 val deviceAddress = addressPeerMap?.entries?.find { it.value == peerID }?.key
                 val addressInfo = deviceAddress?.let { " [Device: $it]" } ?: " [Device: Unknown]"
                 val status = if (activeIds.contains(peerID)) "ACTIVE" else "INACTIVE"

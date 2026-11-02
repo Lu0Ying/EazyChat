@@ -28,8 +28,8 @@ class MessageRouter private constructor(
         }
     }
 
-    // Outbox: peerID -> queued (content, nickname, messageID)
-    private val outbox = mutableMapOf<String, MutableList<Triple<String, String, String>>>()
+    // Outbox: peerID -> queued message; de-duplicated by messageID and thread-safe
+    private val outbox = OfflineMessageQueue()
 
     fun sendPrivate(content: String, toPeerID: String, recipientNickname: String, messageID: String) {
         val hasMesh = mesh.getPeerInfo(toPeerID)?.isConnected == true
@@ -38,9 +38,11 @@ class MessageRouter private constructor(
             Log.d(TAG, "Routing PM via mesh to ${toPeerID} msg_id=${messageID.take(8)}…")
             mesh.sendPrivateMessage(content, toPeerID, recipientNickname, messageID)
         } else {
-            Log.d(TAG, "Queued PM for ${toPeerID} (no mesh connection) msg_id=${messageID.take(8)}…")
-            val q = outbox.getOrPut(toPeerID) { mutableListOf() }
-            q.add(Triple(content, recipientNickname, messageID))
+            if (outbox.enqueue(toPeerID, content, recipientNickname, messageID)) {
+                Log.d(TAG, "Queued PM for ${toPeerID} (no mesh connection) msg_id=${messageID.take(8)}…")
+            } else {
+                Log.d(TAG, "PM already queued for ${toPeerID} msg_id=${messageID.take(8)}…, skipping duplicate")
+            }
             Log.d(TAG, "Initiating noise handshake after queueing PM for ${toPeerID.take(8)}…")
             mesh.initiateNoiseHandshake(toPeerID)
         }
@@ -67,35 +69,30 @@ class MessageRouter private constructor(
 
     // Flush any queued messages for a specific peerID
     fun flushOutboxFor(peerID: String) {
-        val queued = outbox[peerID] ?: return
+        val queued = outbox.peek(peerID)
         if (queued.isEmpty()) return
         Log.d(TAG, "Flushing outbox for ${peerID.take(8)}… count=${queued.size}")
-        val iterator = queued.iterator()
-        while (iterator.hasNext()) {
-            val (content, nickname, messageID) = iterator.next()
+        for (entry in queued) {
             var hasMesh = mesh.getPeerInfo(peerID)?.isConnected == true && mesh.hasEstablishedSession(peerID)
             // If this is a noiseHex key, see if there is a connected mesh peer for this identity
             if (!hasMesh && peerID.length == 64 && peerID.matches(Regex("^[0-9a-fA-F]+$"))) {
                 val meshPeer = resolveMeshPeerForNoiseHex(peerID)
                 if (meshPeer != null && mesh.getPeerInfo(meshPeer)?.isConnected == true && mesh.hasEstablishedSession(meshPeer)) {
-                    mesh.sendPrivateMessage(content, meshPeer, nickname, messageID)
-                    iterator.remove()
+                    mesh.sendPrivateMessage(entry.content, meshPeer, entry.nickname, entry.messageID)
+                    outbox.remove(peerID, entry.messageID)
                     continue
                 }
             }
             if (hasMesh) {
-                mesh.sendPrivateMessage(content, peerID, nickname, messageID)
-                iterator.remove()
+                mesh.sendPrivateMessage(entry.content, peerID, entry.nickname, entry.messageID)
+                outbox.remove(peerID, entry.messageID)
             }
-        }
-        if (queued.isEmpty()) {
-            outbox.remove(peerID)
         }
     }
 
     // Flush everything (rarely used)
     fun flushAllOutbox() {
-        outbox.keys.toList().forEach { flushOutboxFor(it) }
+        outbox.snapshot().keys.forEach { flushOutboxFor(it) }
     }
 
     private fun hexToBytes(hex: String): ByteArray {

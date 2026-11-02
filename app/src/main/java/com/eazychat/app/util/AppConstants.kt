@@ -24,6 +24,8 @@ object AppConstants {
 
         // GATT client RSSI updates
         const val RSSI_UPDATE_INTERVAL_MS: Long = 5_000L
+        // Stop showing RSSI readings older than this
+        const val RSSI_STALE_TIMEOUT_MS: Long = 60_000L
 
         object Gatt {
             val SERVICE_UUID: UUID = UUID.fromString("F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")

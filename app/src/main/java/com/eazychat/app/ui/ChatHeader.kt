@@ -496,7 +496,7 @@ private fun MainHeader(
             
             // Peer counter (now opens sidebar with network)
             PeerCounter(
-                connectedPeers = connectedPeers.filter { it != viewModel.meshService.myPeerID },
+                connectedPeers = connectedPeers,
                 joinedChannels = joinedChannels,
                 isConnected = isConnected,
                 onClick = onSidebarClick
