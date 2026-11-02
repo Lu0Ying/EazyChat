@@ -58,12 +58,19 @@ class FragmentManager {
             Log.d(TAG, "📦 Encoded to ${encoded.size} bytes")
         
         // Fragment the unpadded frame; each fragment will be encoded (and padded) independently - iOS fix
-        val fullData = try {
+        // Frames bigger than the largest padding block are never padded by BinaryProtocol.encode,
+        // so they must not go through PKCS#7 unpad: that could strip genuine trailing signature
+        // bytes of large file transfers and make the reassembled packet undecodable.
+        val fullData = if (encoded.size > MessagePadding.MAX_BLOCK_SIZE) {
+            encoded
+        } else {
+            try {
                 MessagePadding.unpad(encoded)
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to unpad data: ${e.message}", e)
                 return emptyList()
             }
+        }
             Log.d(TAG, "📏 Unpadded to ${fullData.size} bytes")
         
         // iOS logic: if data.count > 512 && packet.type != MessageType.fragment.rawValue

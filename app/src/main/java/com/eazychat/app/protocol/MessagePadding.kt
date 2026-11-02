@@ -9,6 +9,9 @@ import java.security.SecureRandom
 object MessagePadding {
     // Standard block sizes for padding - exact same as iOS
     private val blockSizes = listOf(256, 512, 1024, 2048)
+
+    /** Largest frame that can actually be padded; anything bigger is passed through unchanged. */
+    val MAX_BLOCK_SIZE: Int = blockSizes.last()
     
     /**
      * Find optimal block size for data - exact same logic as iOS

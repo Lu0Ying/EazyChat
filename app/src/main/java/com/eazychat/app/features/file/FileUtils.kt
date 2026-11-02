@@ -58,10 +58,52 @@ object FileUtils {
     }
 
     /**
+     * Base-edition send limit: only files up to 1MB are demonstrated.
+     * Exactly 1MB is accepted, one byte more is rejected.
+     */
+    fun isWithinSendLimit(size: Long): Boolean =
+        size in 0..com.eazychat.app.util.AppConstants.Media.MAX_FILE_SIZE_BYTES
+
+    /**
+     * User-facing notice used when a file is rejected for exceeding the size limit.
+     */
+    fun oversizeSendMessage(size: Long): String =
+        "File exceeds the 1 MB limit (${formatFileSize(size)}); send cancelled"
+
+    /**
+     * Read the size declared by the content provider. Returns null when the provider
+     * does not expose one, in which case the size can only be checked after copying.
+     */
+    fun resolveSourceSize(context: Context, uri: Uri): Long? = try {
+        context.contentResolver.query(
+            uri,
+            arrayOf(android.provider.OpenableColumns.SIZE),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+            if (sizeIndex >= 0 && cursor.moveToFirst() && !cursor.isNull(sizeIndex)) {
+                cursor.getLong(sizeIndex)
+            } else {
+                null
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
      * Copy file to app's outgoing directory for sending
      */
     fun copyFileForSending(context: Context, uri: Uri, originalName: String? = null): String? {
         Log.d(TAG, "🔄 Starting file copy from URI: $uri")
+        // Reject oversize files before copying so nothing large is written to app storage.
+        val declaredSize = resolveSourceSize(context, uri)
+        if (declaredSize != null && !isWithinSendLimit(declaredSize)) {
+            Log.e(TAG, "❌ File exceeds send limit: $declaredSize bytes; copy skipped")
+            return null
+        }
         return try {
             val inputStream = context.contentResolver.openInputStream(uri)
             if (inputStream == null) {
@@ -111,6 +153,14 @@ object FileUtils {
                 FileOutputStream(target).use { output ->
                     input.copyTo(output)
                 }
+            }
+
+            // Safety net for providers that do not declare a size: drop the copy instead of
+            // leaving an oversize file in app storage.
+            if (!isWithinSendLimit(target.length())) {
+                Log.e(TAG, "❌ Copied file exceeds send limit: ${target.length()} bytes; deleting")
+                target.delete()
+                return null
             }
 
             Log.d(TAG, "✅ Successfully copied file for sending: ${target.absolutePath}")
@@ -234,6 +284,8 @@ object FileUtils {
             out.outputStream().use { it.write(file.content) }
             out.absolutePath
         } catch (_: Exception) {
+            // Failed write must not leave a partial file behind
+            runCatching { java.io.File(dir, safeName).delete() }
             // Fallback to cache dir with uniqueness
             try {
                 var fallback = safeName

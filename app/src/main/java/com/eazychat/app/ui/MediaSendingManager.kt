@@ -1,6 +1,7 @@
 package com.eazychat.app.ui
 
 import android.util.Log
+import com.eazychat.app.features.file.FileUtils
 import com.eazychat.app.mesh.BluetoothMeshService
 import com.eazychat.app.model.BitchatFilePacket
 import com.eazychat.app.model.BitchatMessage
@@ -20,7 +21,6 @@ class MediaSendingManager(
 ) {
     companion object {
         private const val TAG = "MediaSendingManager"
-        private const val MAX_FILE_SIZE = com.eazychat.app.util.AppConstants.Media.MAX_FILE_SIZE_BYTES // 1MB limit
     }
 
     // Track in-flight transfer progress: transferId -> messageId and reverse
@@ -39,8 +39,9 @@ class MediaSendingManager(
             }
             Log.d(TAG, "📁 File exists: size=${file.length()} bytes, name=${file.name}")
             
-            if (file.length() > MAX_FILE_SIZE) {
-                Log.e(TAG, "❌ File too large: ${file.length()} bytes (max: $MAX_FILE_SIZE)")
+            if (!FileUtils.isWithinSendLimit(file.length())) {
+                Log.e(TAG, "❌ File too large: ${file.length()} bytes (max: 1MB)")
+                notifyOversizeRejected(file.name, file.length())
                 return
             }
 
@@ -74,8 +75,9 @@ class MediaSendingManager(
             }
             Log.d(TAG, "📁 File exists: size=${file.length()} bytes, name=${file.name}")
             
-            if (file.length() > MAX_FILE_SIZE) {
-                Log.e(TAG, "❌ File too large: ${file.length()} bytes (max: $MAX_FILE_SIZE)")
+            if (!FileUtils.isWithinSendLimit(file.length())) {
+                Log.e(TAG, "❌ File too large: ${file.length()} bytes (max: 1MB)")
+                notifyOversizeRejected(file.name, file.length())
                 return
             }
 
@@ -112,8 +114,9 @@ class MediaSendingManager(
             }
             Log.d(TAG, "📁 File exists: size=${file.length()} bytes, name=${file.name}")
             
-            if (file.length() > MAX_FILE_SIZE) {
-                Log.e(TAG, "❌ File too large: ${file.length()} bytes (max: $MAX_FILE_SIZE)")
+            if (!FileUtils.isWithinSendLimit(file.length())) {
+                Log.e(TAG, "❌ File too large: ${file.length()} bytes (max: 1MB)")
+                notifyOversizeRejected(file.name, file.length())
                 return
             }
 
@@ -334,6 +337,13 @@ class MediaSendingManager(
                 )
             }
         }
+    }
+
+    /**
+     * Surface an oversize rejection in the chat so a blocked send is never silent.
+     */
+    private fun notifyOversizeRejected(fileName: String, size: Long) {
+        messageManager.addSystemMessage("$fileName — ${FileUtils.oversizeSendMessage(size)}")
     }
 
     private fun sha256Hex(bytes: ByteArray): String = try {

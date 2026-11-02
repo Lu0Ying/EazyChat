@@ -32,6 +32,16 @@ fun FilePickerButton(
         if (uri != null) {
             // Persist temporary read permission so we can copy
             try { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+            val declaredSize = FileUtils.resolveSourceSize(context, uri)
+            if (declaredSize != null && !FileUtils.isWithinSendLimit(declaredSize)) {
+                // Explicit feedback instead of silently doing nothing
+                android.widget.Toast.makeText(
+                    context,
+                    FileUtils.oversizeSendMessage(declaredSize),
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                return@rememberLauncherForActivityResult
+            }
             val path = FileUtils.copyFileForSending(context, uri)
             if (!path.isNullOrBlank()) onFileReady(path)
         }
