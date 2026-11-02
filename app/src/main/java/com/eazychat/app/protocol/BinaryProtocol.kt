@@ -16,7 +16,6 @@ enum class MessageType(val value: UByte) {
     NOISE_HANDSHAKE(0x10u),  // Noise handshake
     NOISE_ENCRYPTED(0x11u),  // Noise encrypted transport message
     FRAGMENT(0x20u), // Fragmentation for large packets
-    REQUEST_SYNC(0x21u), // GCS-based sync request
     FILE_TRANSFER(0x22u); // New: File transfer packet (BLE voice notes, etc.)
 
     companion object {
@@ -36,7 +35,7 @@ object SpecialRecipients {
 /**
  * Binary packet format - 100% backward compatible with iOS version
  *
- * Header (13 bytes for v1, 15 bytes for v2):
+ * Header (14 bytes for v1, 16 bytes for v2):
  * - Version: 1 byte
  * - Type: 1 byte
  * - TTL: 1 byte
@@ -171,7 +170,7 @@ data class BitchatPacket(
  */
 object BinaryProtocol {
     private const val HEADER_SIZE_V1 = 14
-    private const val HEADER_SIZE_V2 = 15
+    private const val HEADER_SIZE_V2 = 16
     private const val SENDER_ID_SIZE = 8
     private const val RECIPIENT_ID_SIZE = 8
     private const val SIGNATURE_SIZE = 64

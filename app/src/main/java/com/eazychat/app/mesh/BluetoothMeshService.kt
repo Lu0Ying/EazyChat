@@ -10,7 +10,6 @@ import com.eazychat.app.model.IdentityAnnouncement
 import com.eazychat.app.protocol.BitchatPacket
 import com.eazychat.app.protocol.MessageType
 import com.eazychat.app.protocol.SpecialRecipients
-import com.eazychat.app.model.RequestSyncPacket
 
 import com.eazychat.app.util.toHexString
 import kotlinx.coroutines.*
