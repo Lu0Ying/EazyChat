@@ -69,8 +69,19 @@ class SecurityManager(private val encryptionService: EncryptionService, private 
             // They are signed/idempotent and we need to ensure first-announce per-connection can bind.
         }
         
-        // NEW: Signature verification logging (not rejecting yet)
-        verifyPacketSignatureWithLogging(packet, peerID)
+        // Enforce signatures on user messages (broadcast / channel / private / file).
+        // Legacy packets without a signature stay accepted for backward compatibility;
+        // once a signature is present it must verify, otherwise the packet is dropped
+        // before it can be displayed or relayed.
+        when (messageType) {
+            MessageType.MESSAGE, MessageType.FILE_TRANSFER -> {
+                if (!verifySignature(packet, peerID)) {
+                    Log.w(TAG, "🚫 Dropping packet with invalid signature from $peerID (type $messageType)")
+                    return false
+                }
+            }
+            else -> verifyPacketSignatureWithLogging(packet, peerID)
+        }
         
         Log.d(TAG, "Packet validation passed for $peerID, messageID: $messageID")
         return true
@@ -145,21 +156,41 @@ class SecurityManager(private val encryptionService: EncryptionService, private 
     }
 
     /**
-     * Verify packet signature
+     * Verify packet signature.
+     *
+     * - No signature: accepted (legacy packets compatibility).
+     * - Signed: must verify against the signing key announced by the packet's original sender.
+     *   Relay hops keep the original senderID, so the key is resolved from senderID first and
+     *   only then from the directly connected peer.
      */
     fun verifySignature(packet: BitchatPacket, peerID: String): Boolean {
-        return packet.signature?.let { signature ->
-            try {
-                val isValid = encryptionService.verify(signature, packet.payload, peerID)
-                if (!isValid) {
-                    Log.w(TAG, "Invalid signature for packet from $peerID")
-                }
-                isValid
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to verify signature from $peerID: ${e.message}")
-                false
+        val signature = packet.signature ?: return true
+
+        val canonicalBytes = packet.toBinaryDataForSigning()
+        if (canonicalBytes == null) {
+            Log.w(TAG, "Cannot build canonical bytes for signature verification from $peerID")
+            return false
+        }
+
+        val senderPeerID = packet.senderID.toHexString()
+        val signingPublicKey = delegate?.getPeerInfo(senderPeerID)?.signingPublicKey
+            ?: delegate?.getPeerInfo(peerID)?.signingPublicKey
+
+        if (signingPublicKey == null) {
+            Log.w(TAG, "No announced signing key for $senderPeerID (received via $peerID); rejecting signed packet")
+            return false
+        }
+
+        return try {
+            val isValid = encryptionService.verifyEd25519Signature(signature, canonicalBytes, signingPublicKey)
+            if (!isValid) {
+                Log.w(TAG, "Invalid signature for packet from $senderPeerID")
             }
-        } ?: true // No signature means verification passes
+            isValid
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to verify signature from $senderPeerID: ${e.message}")
+            false
+        }
     }
     
     /**

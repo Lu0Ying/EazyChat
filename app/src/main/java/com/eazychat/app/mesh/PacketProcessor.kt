@@ -118,7 +118,7 @@ class PacketProcessor(private val myPeerID: String) {
     /**
      * Handle received packet - core protocol logic (exact same as iOS)
      */
-    private suspend fun handleReceivedPacket(routed: RoutedPacket) {
+    internal suspend fun handleReceivedPacket(routed: RoutedPacket) {
         val packet = routed.packet
         val peerID = routed.peerID ?: "unknown"
 

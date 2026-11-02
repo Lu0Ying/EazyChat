@@ -209,7 +209,10 @@ class BluetoothMeshService(private val context: Context) {
             }
             
             override fun updatePeerInfo(peerID: String, nickname: String, noisePublicKey: ByteArray, signingPublicKey: ByteArray, isVerified: Boolean): Boolean {
-                return peerManager.updatePeerInfo(peerID, nickname, noisePublicKey, signingPublicKey, isVerified)
+                val isFirstAnnounce = peerManager.updatePeerInfo(peerID, nickname, noisePublicKey, signingPublicKey, isVerified)
+                // Remember the announced signing key so later packets from this peer can be verified
+                encryptionService.registerPeerSigningKey(peerID, signingPublicKey)
+                return isFirstAnnounce
             }
             
             // Packet operations
@@ -962,7 +965,9 @@ class BluetoothMeshService(private val context: Context) {
         signingPublicKey: ByteArray,
         isVerified: Boolean
     ): Boolean {
-        return peerManager.updatePeerInfo(peerID, nickname, noisePublicKey, signingPublicKey, isVerified)
+        val isFirstAnnounce = peerManager.updatePeerInfo(peerID, nickname, noisePublicKey, signingPublicKey, isVerified)
+        encryptionService.registerPeerSigningKey(peerID, signingPublicKey)
+        return isFirstAnnounce
     }
     
     /**

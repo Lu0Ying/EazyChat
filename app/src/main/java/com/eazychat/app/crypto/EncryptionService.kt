@@ -31,6 +31,9 @@ class EncryptionService(private val context: Context) {
     
     // Session tracking for established connections
     private val establishedSessions = ConcurrentHashMap<String, String>() // peerID -> fingerprint
+
+    // Ed25519 signing public keys learned from verified ANNOUNCE packets (peerID -> 32-byte key)
+    private val peerSigningKeys = ConcurrentHashMap<String, ByteArray>()
     
     // Ed25519 signing keys (separate from Noise static keys)
     private val ed25519PrivateKey: Ed25519PrivateKeyParameters
@@ -132,6 +135,7 @@ class EncryptionService(private val context: Context) {
     fun clearPersistentIdentity() {
         noiseService.clearPersistentIdentity()
         establishedSessions.clear()
+        peerSigningKeys.clear()
         
         // Clear Ed25519 signing key from preferences
         try {
@@ -179,14 +183,31 @@ class EncryptionService(private val context: Context) {
     }
     
     /**
-     * Verify signature using peer's identity key
-     * Note: This is now done at the packet level, not per-message
+     * Verify an Ed25519 signature against peer's announced signing key.
+     *
+     * The key is learned from the verified ANNOUNCE packet and registered via
+     * [registerPeerSigningKey]; without it a signed packet cannot be verified and is rejected.
      */
     @Throws(Exception::class)
     fun verify(signature: ByteArray, data: ByteArray, peerID: String): Boolean {
-        // Note: In Noise protocol, authentication is built into the transport
-        // Messages are authenticated automatically when decrypted
-        return hasEstablishedSession(peerID)
+        val signingPublicKey = peerSigningKeys[peerID]
+        if (signingPublicKey == null) {
+            Log.w(TAG, "❌ No signing public key registered for $peerID, cannot verify signature")
+            return false
+        }
+        return verifyEd25519Signature(signature, data, signingPublicKey)
+    }
+
+    /**
+     * Remember a peer's Ed25519 signing public key learned from a verified ANNOUNCE.
+     * Passing null removes the stored key.
+     */
+    fun registerPeerSigningKey(peerID: String, publicKey: ByteArray?) {
+        if (publicKey == null) {
+            peerSigningKeys.remove(peerID)
+        } else {
+            peerSigningKeys[peerID] = publicKey.clone()
+        }
     }
     
     // MARK: - Noise Protocol Interface
@@ -357,18 +378,9 @@ class EncryptionService(private val context: Context) {
      * Verify Ed25519 signature against data using a public key
      */
     fun verifyEd25519Signature(signature: ByteArray, data: ByteArray, publicKeyBytes: ByteArray): Boolean {
-        return try {
-            val publicKey = Ed25519PublicKeyParameters(publicKeyBytes, 0)
-            val verifier = Ed25519Signer()
-            verifier.init(false, publicKey)
-            verifier.update(data, 0, data.size)
-            val isValid = verifier.verifySignature(signature)
-            Log.d(TAG, "✅ Ed25519 signature verification: $isValid")
-            isValid
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to verify Ed25519 signature: ${e.message}")
-            false
-        }
+        val isValid = PacketSignatureVerifier.verifyEd25519(signature, data, publicKeyBytes)
+        Log.d(TAG, "✅ Ed25519 signature verification: $isValid")
+        return isValid
     }
     
     // MARK: - Private Key Management
