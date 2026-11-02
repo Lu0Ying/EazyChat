@@ -13,6 +13,7 @@ class DataManager(private val context: Context) {
     
     companion object {
         private const val TAG = "DataManager"
+        private const val COMMITMENT_PREFIX = "channel_password_commitment_"
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences("bitchat_prefs", Context.MODE_PRIVATE)
@@ -110,6 +111,25 @@ class DataManager(private val context: Context) {
         }
     }
     
+    // Password commitments let a channel password be checked across restarts (see ChannelCrypto)
+    fun saveChannelPasswordCommitment(channel: String, commitment: String) {
+        prefs.edit().putString("$COMMITMENT_PREFIX$channel", commitment).apply()
+    }
+
+    fun loadChannelPasswordCommitment(channel: String): String? {
+        return prefs.getString("$COMMITMENT_PREFIX$channel", null)
+    }
+
+    fun removeChannelPasswordCommitment(channel: String) {
+        prefs.edit().remove("$COMMITMENT_PREFIX$channel").apply()
+    }
+
+    fun clearChannelPasswordCommitments() {
+        val editor = prefs.edit()
+        prefs.all.keys.filter { it.startsWith(COMMITMENT_PREFIX) }.forEach { editor.remove(it) }
+        editor.apply()
+    }
+
     fun addChannelCreator(channel: String, creatorID: String) {
         _channelCreators[channel] = creatorID
     }

@@ -2,7 +2,6 @@ package com.eazychat.app.ui
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -101,6 +100,8 @@ class ChannelManager(
         dataManager.removeChannelMembers(channel)
         channelKeys.remove(channel)
         channelPasswords.remove(channel)
+        channelKeyCommitments.remove(channel)
+        dataManager.removeChannelPasswordCommitment(channel)
         dataManager.removeChannelCreator(channel)
         
         saveChannelData()
@@ -119,21 +120,26 @@ class ChannelManager(
     // MARK: - Channel Password and Encryption
     
     private fun verifyChannelPassword(channel: String, password: String): Boolean {
-        // TODO: REMOVE THIS - FOR TESTING ONLY
+        val storedCommitment = channelKeyCommitments[channel]
+            ?: dataManager.loadChannelPasswordCommitment(channel)
+
+        if (!ChannelCrypto.verifies(storedCommitment, password, channel)) {
+            return false
+        }
+
+        // Accepted: cache the derived key and persist the commitment so later attempts are checked.
+        val key = ChannelCrypto.deriveKey(password, channel)
+        val commitment = ChannelCrypto.commitment(key)
+        channelKeys[channel] = key
+        channelPasswords[channel] = password
+        channelKeyCommitments[channel] = commitment
+        dataManager.saveChannelPasswordCommitment(channel, commitment)
         return true
     }
     
     private fun deriveChannelKey(password: String, channelName: String): SecretKeySpec {
         // PBKDF2 key derivation (same as iOS version)
-        val factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = javax.crypto.spec.PBEKeySpec(
-            password.toCharArray(),
-            channelName.toByteArray(),
-            100000, // 100,000 iterations (same as iOS)
-            256 // 256-bit key
-        )
-        val secretKey = factory.generateSecret(spec)
-        return SecretKeySpec(secretKey.encoded, "AES")
+        return ChannelCrypto.deriveKey(password, channelName)
     }
     
     fun decryptChannelMessage(encryptedContent: ByteArray, channel: String): String? {
@@ -236,7 +242,11 @@ class ChannelManager(
 
         channelPasswords[channel] = password
 
-        channelKeys[channel] = deriveChannelKey(password, channel)
+        val key = deriveChannelKey(password, channel)
+        channelKeys[channel] = key
+        val commitment = ChannelCrypto.commitment(key)
+        channelKeyCommitments[channel] = commitment
+        dataManager.saveChannelPasswordCommitment(channel, commitment)
 
         state.setPasswordProtectedChannels(
             state.getPasswordProtectedChannelsValue().toMutableSet().apply { add(channel) }
@@ -261,5 +271,6 @@ class ChannelManager(
         channelPasswords.clear()
         channelKeyCommitments.clear()
         retentionEnabledChannels.clear()
+        dataManager.clearChannelPasswordCommitments()
     }
 }
