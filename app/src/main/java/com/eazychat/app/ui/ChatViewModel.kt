@@ -422,7 +422,10 @@ class ChatViewModel(
     private fun initializeSessionStateMonitoring() {
         viewModelScope.launch {
             while (true) {
-                delay(1000) // Check session states every second
+                // Full refresh of session/RSSI/peer state every 4s instead of every second.
+                // Cheap on CPU, at the cost of up to 4s delay before stale RSSI or session
+                // changes are reflected in the UI.
+                delay(4000)
                 updateReactiveStates()
             }
         }

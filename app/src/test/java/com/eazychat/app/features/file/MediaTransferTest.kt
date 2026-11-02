@@ -51,6 +51,32 @@ class MediaTransferTest {
     }
 
     @Test
+    fun `incoming file of exactly one megabyte is accepted`() {
+        val file = BitchatFilePacket(
+            fileName = "edge.bin",
+            fileSize = ONE_MB,
+            mimeType = "application/octet-stream",
+            content = ByteArray(ONE_MB.toInt())
+        )
+        assertTrue(FileUtils.isIncomingWithinLimit(file))
+    }
+
+    @Test
+    fun `incoming file over one megabyte is rejected`() {
+        val oversizeContent = ByteArray(ONE_MB.toInt() + 1)
+        val declared = BitchatFilePacket(
+            fileName = "big.bin",
+            fileSize = ONE_MB + 1,
+            mimeType = "application/octet-stream",
+            content = oversizeContent
+        )
+        assertFalse(FileUtils.isIncomingWithinLimit(declared))
+        // A sender may under-declare the size; the decoded content must still be rejected.
+        val underDeclared = declared.copy(fileSize = 1024)
+        assertFalse(FileUtils.isIncomingWithinLimit(underDeclared))
+    }
+
+    @Test
     fun `mime type is derived from extension`() {
         assertEquals("image/jpeg", FileUtils.getMimeTypeFromExtension("photo.JPG"))
         assertEquals("audio/mp4", FileUtils.getMimeTypeFromExtension("voice.m4a"))

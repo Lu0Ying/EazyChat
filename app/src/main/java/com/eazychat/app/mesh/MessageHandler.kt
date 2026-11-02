@@ -116,6 +116,7 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                     val file = com.eazychat.app.model.BitchatFilePacket.decode(noisePayload.data)
                     if (file != null) {
                         Log.d(TAG, "🔓 Decrypted encrypted file from $peerID: name='${file.fileName}', size=${file.fileSize}, mime='${file.mimeType}'")
+                        if (rejectOversizeIncomingFile(file, peerID, isPrivate = true)) return
                         val uniqueMsgId = java.util.UUID.randomUUID().toString().uppercase()
                         val savedPath = com.eazychat.app.features.file.FileUtils.saveIncomingFile(appContext, file)
                         val message = BitchatMessage(
@@ -396,6 +397,7 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                 if (isFileTransfer) {
                     Log.d(TAG, "📥 FILE_TRANSFER decode success (broadcast): name='${file.fileName}', size=${file.fileSize}, mime='${file.mimeType}', from=${peerID.take(8)}")
                 }
+                if (rejectOversizeIncomingFile(file, peerID, isPrivate = false)) return
                 val savedPath = com.eazychat.app.features.file.FileUtils.saveIncomingFile(appContext, file)
                 val message = BitchatMessage(
                     id = java.util.UUID.randomUUID().toString().uppercase(),
@@ -443,6 +445,7 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                 if (isFileTransfer) {
                     Log.d(TAG, "📥 FILE_TRANSFER decode success (private): name='${file.fileName}', size=${file.fileSize}, mime='${file.mimeType}', from=${peerID.take(8)}")
                 }
+                if (rejectOversizeIncomingFile(file, peerID, isPrivate = true)) return
                 val savedPath = com.eazychat.app.features.file.FileUtils.saveIncomingFile(appContext, file)
                 val message = BitchatMessage(
                     id = java.util.UUID.randomUUID().toString().uppercase(),
@@ -473,6 +476,32 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process private message from $peerID: ${e.message}")
         }
+    }
+
+    /**
+     * Receiver-side 1 MB guard. Checks before anything is written to disk and surfaces
+     * a visible system message instead of dropping the file silently.
+     * Returns true when the file was rejected.
+     */
+    private fun rejectOversizeIncomingFile(
+        file: com.eazychat.app.model.BitchatFilePacket,
+        peerID: String,
+        isPrivate: Boolean
+    ): Boolean {
+        if (com.eazychat.app.features.file.FileUtils.isIncomingWithinLimit(file)) return false
+        val size = maxOf(file.fileSize, file.content.size.toLong())
+        Log.w(TAG, "⚠️ Rejected incoming file over 1 MB from ${peerID.take(8)}: name='${file.fileName}', size=$size")
+        delegate?.onMessageReceived(
+            BitchatMessage(
+                sender = "system",
+                content = com.eazychat.app.features.file.FileUtils.oversizeIncomingMessage(size),
+                timestamp = Date(),
+                isRelay = false,
+                isPrivate = isPrivate,
+                recipientNickname = if (isPrivate) delegate?.getMyNickname() else null
+            )
+        )
+        return true
     }
 
     

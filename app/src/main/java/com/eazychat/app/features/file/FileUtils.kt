@@ -71,6 +71,20 @@ object FileUtils {
         "File exceeds the 1 MB limit (${formatFileSize(size)}); send cancelled"
 
     /**
+     * Receiver-side mirror of [isWithinSendLimit]. A sender can under-declare
+     * [BitchatFilePacket.fileSize], so both the declared size and the actually
+     * decoded content are checked; the larger one decides.
+     */
+    fun isIncomingWithinLimit(file: com.eazychat.app.model.BitchatFilePacket): Boolean =
+        isWithinSendLimit(maxOf(file.fileSize, file.content.size.toLong()))
+
+    /**
+     * User-facing notice used when an incoming file is rejected for exceeding the size limit.
+     */
+    fun oversizeIncomingMessage(size: Long): String =
+        "Incoming file rejected: exceeds the 1 MB limit (${formatFileSize(size)})"
+
+    /**
      * Read the size declared by the content provider. Returns null when the provider
      * does not expose one, in which case the size can only be checked after copying.
      */
