@@ -348,6 +348,19 @@ class ChatViewModel(
     }
 
     // MARK: - Utility Functions
+
+    /** One-tap SOS: broadcast an emergency message to everyone within mesh reach. */
+    fun sendSos(note: String?) {
+        val message = BitchatMessage(
+            sender = state.getNicknameValue() ?: meshService.myPeerID,
+            content = SosSupport.buildContent(note),
+            timestamp = Date(),
+            isRelay = false,
+            senderPeerID = meshService.myPeerID
+        )
+        messageManager.addMessage(message)
+        meshService.sendMessage(message.content, emptyList(), null)
+    }
     
     fun getPeerIDForNickname(nickname: String): String? {
         return meshService.getPeerNicknames().entries.find { it.value == nickname }?.key

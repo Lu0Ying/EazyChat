@@ -118,7 +118,8 @@ object AppConstants {
     }
 
     object Media {
-        const val MAX_FILE_SIZE_BYTES: Long = 50L * 1024 * 1024
+        // 基础版仅承诺 1MB 以内的文件演示传输，超出上限直接拒绝发送
+        const val MAX_FILE_SIZE_BYTES: Long = 1L * 1024 * 1024
     }
 
     object Services {

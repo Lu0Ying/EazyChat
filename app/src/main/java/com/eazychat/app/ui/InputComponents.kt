@@ -170,6 +170,7 @@ fun MessageInput(
     onSendVoiceNote: (String?, String?, String) -> Unit,
     onSendImageNote: (String?, String?, String) -> Unit,
     onSendFileNote: (String?, String?, String) -> Unit,
+    onSendSos: (String?) -> Unit,
     selectedPrivatePeer: String?,
     currentChannel: String?,
     nickname: String,
@@ -184,6 +185,8 @@ fun MessageInput(
     var isRecording by remember { mutableStateOf(false) }
     var elapsedMs by remember { mutableStateOf(0L) }
     var amplitude by remember { mutableStateOf(0) }
+    var showSosDialog by remember { mutableStateOf(false) }
+    var sosNote by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -215,7 +218,22 @@ fun MessageInput(
                             it
                         )
                     }
-                    
+
+                    // One-tap SOS broadcast
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0xFFD32F2F), CircleShape)
+                            .clickable { showSosDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.sos_button),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
                 }
             }
@@ -342,6 +360,40 @@ fun MessageInput(
                 }
             }
         }
+    }
+
+    if (showSosDialog) {
+        AlertDialog(
+            onDismissRequest = { showSosDialog = false },
+            title = { Text(stringResource(R.string.sos_dialog_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.sos_dialog_message))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = sosNote,
+                        onValueChange = { sosNote = it },
+                        placeholder = { Text(stringResource(R.string.sos_note_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSosDialog = false
+                    onSendSos(sosNote.trim().ifEmpty { null })
+                    sosNote = ""
+                }) {
+                    Text(stringResource(R.string.sos_send), color = Color(0xFFD32F2F))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSosDialog = false }) {
+                    Text(stringResource(R.string.sos_cancel))
+                }
+            }
+        )
     }
 
     // Auto-stop handled inside VoiceRecordButton

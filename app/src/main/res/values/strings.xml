@@ -390,4 +390,14 @@
     <item quantity="other">%d people</item>
   </plurals>
 
+    <!-- SOS -->
+    <string name="sos_button">SOS</string>
+    <string name="sos_dialog_title">Send SOS</string>
+    <string name="sos_dialog_message">Broadcast an emergency request to everyone nearby. Nearby peers are alerted immediately and send back a delivery receipt.</string>
+    <string name="sos_note_hint">Optional note (e.g. location)</string>
+    <string name="sos_send">Send SOS</string>
+    <string name="sos_cancel">Cancel</string>
+    <string name="sos_sent">SOS broadcast sent</string>
+    <string name="sos_notification_title">🆘 %1$s needs help</string>
+    <string name="sos_notification_body">Please respond as soon as possible</string>
 </resources>

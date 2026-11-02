@@ -43,6 +43,34 @@ class MeshDelegateHandler(
             // Trigger haptic feedback
             onHapticFeedback()
 
+            // SOS broadcast: always alert loudly and send a receipt back to the sender
+            if (SosSupport.isSos(message.content)) {
+                if (message.senderPeerID == getMyPeerID()) {
+                    return@launch
+                }
+                messageManager.addMessage(message)
+                notificationManager.showSosNotification(
+                    senderNickname = message.sender,
+                    note = SosSupport.noteOf(message.content),
+                    messageId = message.id
+                )
+                getMeshService().sendMessage(
+                    SosSupport.buildAckContent(message.id),
+                    emptyList(),
+                    null
+                )
+                return@launch
+            }
+
+            // SOS delivery receipt: update the original message, never show the receipt itself
+            SosSupport.parseAck(message.content)?.let { sosMessageId ->
+                messageManager.updateMessageDeliveryStatus(
+                    sosMessageId,
+                    DeliveryStatus.Delivered(message.sender, Date())
+                )
+                return@launch
+            }
+
             if (message.isPrivate) {
                 // Private message
                 privateChatManager.handleIncomingPrivateMessage(message)

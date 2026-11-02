@@ -1,5 +1,6 @@
 package com.eazychat.app.ui
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -34,6 +35,7 @@ class NotificationManager(
     companion object {
         private const val TAG = "NotificationManager"
         private const val CHANNEL_ID = "p2p_chat_dm_notifications"
+        private const val SOS_CHANNEL_ID = "p2p_chat_sos_notifications"
         private const val GEOHASH_CHANNEL_ID = "p2p_chat_geohash_notifications"
         private const val GROUP_KEY_DM = "p2p_chat_dm_group"
         private const val GROUP_KEY_GEOHASH = "p2p_chat_geohash_group"
@@ -113,7 +115,50 @@ class NotificationManager(
                 setShowBadge(true)
             }
             systemNotificationManager.createNotificationChannel(geohashChannel)
+
+            // SOS channel: maximum importance so an emergency always interrupts the user
+            val sosChannel = NotificationChannel(SOS_CHANNEL_ID, "SOS Alerts", NotificationManager.IMPORTANCE_MAX).apply {
+                description = "Emergency help requests from nearby peers"
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 400, 200, 400, 200, 400)
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            systemNotificationManager.createNotificationChannel(sosChannel)
         }
+    }
+
+    /**
+     * Show a high-priority SOS alert. Unlike chat notifications this is shown even when the
+     * app is in the foreground, because it is an emergency.
+     */
+    fun showSosNotification(senderNickname: String, note: String?, messageId: String) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            NOTIFICATION_REQUEST_CODE + messageId.hashCode(),
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val body = note ?: context.getString(R.string.sos_notification_body)
+        val builder = NotificationCompat.Builder(context, SOS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(context.getString(R.string.sos_notification_title, senderNickname))
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVibrate(longArrayOf(0, 400, 200, 400, 200, 400))
+            .setShowWhen(true)
+
+        notificationManager.notify(messageId.hashCode(), builder.build())
+        Log.d(TAG, "Displayed SOS notification from $senderNickname")
     }
 
     /**

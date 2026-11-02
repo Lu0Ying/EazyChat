@@ -14,5 +14,15 @@
   <string name="location_notes_empty_desc">成为第一个为此地点添加笔记的人。</string>
   <string name="dismiss">关闭</string>
   <string name="location_notes_input_placeholder">为此地点添加一条笔记</string>
+    <!-- SOS -->
+    <string name="sos_button">SOS</string>
+    <string name="sos_dialog_title">发送求救信号</string>
+    <string name="sos_dialog_message">向附近所有人广播求救信息。附近用户会立即收到强提醒，并向你回传送达回执。</string>
+    <string name="sos_note_hint">可选备注（例如所在位置）</string>
+    <string name="sos_send">发送求救</string>
+    <string name="sos_cancel">取消</string>
+    <string name="sos_sent">求救信号已广播</string>
+    <string name="sos_notification_title">🆘 %1$s 发出求救</string>
+    <string name="sos_notification_body">请尽快回应并提供帮助</string>
 </resources>
 

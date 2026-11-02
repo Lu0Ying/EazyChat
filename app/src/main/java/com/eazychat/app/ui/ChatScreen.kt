@@ -197,6 +197,9 @@ fun ChatScreen(viewModel: ChatViewModel) {
                     onSendFileNote = { peer, onionOrChannel, path ->
                         viewModel.sendFileNote(peer, onionOrChannel, path)
                     },
+                    onSendSos = { note ->
+                        viewModel.sendSos(note)
+                    },
                     
                     showCommandSuggestions = showCommandSuggestions,
                     commandSuggestions = commandSuggestions,
@@ -341,6 +344,7 @@ private fun ChatInputSection(
     onSendVoiceNote: (String?, String?, String) -> Unit,
     onSendImageNote: (String?, String?, String) -> Unit,
     onSendFileNote: (String?, String?, String) -> Unit,
+    onSendSos: (String?) -> Unit,
     showCommandSuggestions: Boolean,
     commandSuggestions: List<CommandSuggestion>,
     showMentionSuggestions: Boolean,
@@ -400,6 +404,7 @@ private fun ChatInputSection(
                 onSendVoiceNote = onSendVoiceNote,
                 onSendImageNote = onSendImageNote,
                 onSendFileNote = onSendFileNote,
+                onSendSos = onSendSos,
                 selectedPrivatePeer = selectedPrivatePeer,
                 currentChannel = currentChannel,
                 nickname = nickname,
