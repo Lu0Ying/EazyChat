@@ -376,14 +376,14 @@ class PrivateChatManager(
             )
             noiseSessionDelegate.initiateHandshake(peerID)
         } else {
-            // They should initiate, we send identity announcement through standard announce
+            // The peer has the lower ID and owns the handshake. Both sides initiating would make the
+            // Noise XX state machines consume each other's first message and fail, so only send an
+            // announcement here and let the peer start (sendPrivateMessage still initiates on demand).
             Log.d(
                 TAG,
-                "Our peer ID lexicographically >= target peer ID, sending identity announcement to prompt handshake from $peerID"
+                "Our peer ID lexicographically >= target peer ID, sending identity announcement and waiting for $peerID to initiate"
             )
             meshService.sendAnnouncementToPeer(peerID)
-            Log.d(TAG, "Sent identity announcement to $peerID – starting handshake now from our side")
-            noiseSessionDelegate.initiateHandshake(peerID)
         }
 
     }

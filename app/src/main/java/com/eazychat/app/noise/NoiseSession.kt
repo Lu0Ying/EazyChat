@@ -24,9 +24,9 @@ class NoiseSession(
         // Noise Protocol Configuration (exactly matching iOS)
         private const val PROTOCOL_NAME = "Noise_XX_25519_ChaChaPoly_SHA256"
         
-        // Rekey thresholds (same as iOS)
+        // Rekey thresholds
         private const val REKEY_TIME_LIMIT = com.eazychat.app.util.AppConstants.Noise.REKEY_TIME_LIMIT_MS // 1 hour
-        private const val REKEY_MESSAGE_LIMIT = com.eazychat.app.util.AppConstants.Noise.REKEY_MESSAGE_LIMIT_SESSION // 10k messages
+        private const val REKEY_MESSAGE_LIMIT = com.eazychat.app.util.AppConstants.Noise.REKEY_MESSAGE_LIMIT_ENCRYPTION // 1000 messages per session
         
         // XX Pattern Message Sizes (exactly matching iOS implementation)
         private const val XX_MESSAGE_1_SIZE = 32      // -> e (ephemeral key only)
