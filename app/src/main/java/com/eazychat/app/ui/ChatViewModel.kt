@@ -321,25 +321,8 @@ class ChatViewModel(
             if (currentChannelValue != null) {
                 channelManager.addChannelMessage(currentChannelValue, message, meshService.myPeerID)
 
-                // Check if encrypted channel
-                if (channelManager.hasChannelKey(currentChannelValue)) {
-                    channelManager.sendEncryptedChannelMessage(
-                        content,
-                        mentions,
-                        currentChannelValue,
-                        state.getNicknameValue(),
-                        meshService.myPeerID,
-                        onEncryptedPayload = { encryptedData ->
-                            // This would need proper mesh service integration
-                            meshService.sendMessage(content, mentions, currentChannelValue)
-                        },
-                        onFallback = {
-                            meshService.sendMessage(content, mentions, currentChannelValue)
-                        }
-                    )
-                } else {
-                    meshService.sendMessage(content, mentions, currentChannelValue)
-                }
+                // Basic build keeps channel chat plaintext (signed broadcast); no channel encryption layer.
+                meshService.sendMessage(content, mentions, currentChannelValue)
             } else {
                 messageManager.addMessage(message)
                 meshService.sendMessage(content, mentions, null)

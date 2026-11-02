@@ -167,19 +167,6 @@ class ChannelManager(
         }
     }
     
-    fun sendEncryptedChannelMessage(
-        content: String, 
-        mentions: List<String>, 
-        channel: String, 
-        senderNickname: String?, 
-        myPeerID: String,
-        onEncryptedPayload: (ByteArray) -> Unit,
-        onFallback: () -> Unit
-    ) {
-        // TODO: REIMPLEMENT – REMOVED FOR NOW
-        return
-    }
-    
     // MARK: - Channel Management
     
     fun addChannelMessage(channel: String, message: BitchatMessage, senderPeerID: String?) {

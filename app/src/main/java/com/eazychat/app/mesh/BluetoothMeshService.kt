@@ -529,15 +529,31 @@ class BluetoothMeshService(private val context: Context) {
      */
     fun sendMessage(content: String, mentions: List<String> = emptyList(), channel: String? = null) {
         if (content.isEmpty()) return
-        
+
         serviceScope.launch {
+            val now = System.currentTimeMillis()
+            // Channel / mention messages need their metadata on the wire, otherwise receivers
+            // cannot tell which channel a broadcast belongs to. Plain mesh chat stays raw UTF-8.
+            val payload = if (channel != null || mentions.isNotEmpty()) {
+                BitchatMessage(
+                    sender = delegate?.getNickname() ?: myPeerID,
+                    content = content,
+                    timestamp = Date(now),
+                    senderPeerID = myPeerID,
+                    mentions = mentions.ifEmpty { null },
+                    channel = channel
+                ).toStructuredPayload() ?: content.toByteArray(Charsets.UTF_8)
+            } else {
+                content.toByteArray(Charsets.UTF_8)
+            }
+
             val packet = BitchatPacket(
                 version = 1u,
                 type = MessageType.MESSAGE.value,
                 senderID = hexStringToByteArray(myPeerID),
                 recipientID = SpecialRecipients.BROADCAST,
-                timestamp = System.currentTimeMillis().toULong(),
-                payload = content.toByteArray(Charsets.UTF_8),
+                timestamp = now.toULong(),
+                payload = payload,
                 signature = null,
                 ttl = MAX_TTL
             )

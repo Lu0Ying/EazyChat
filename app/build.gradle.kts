@@ -59,6 +59,12 @@ android {
         abortOnError = false
         checkReleaseBuilds = false
     }
+    testOptions {
+        unitTests {
+            // Robolectric tests (channel manager) need the merged manifest/resources.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {

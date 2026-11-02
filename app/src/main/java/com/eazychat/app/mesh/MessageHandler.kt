@@ -376,6 +376,19 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
         }
         
         try {
+            // Structured broadcast (channel / mentions): marker byte + BitchatMessage binary payload.
+            // Decoded first because the marker is unambiguous, while file packets are not marker-prefixed.
+            BitchatMessage.fromStructuredPayload(packet.payload)?.let { structured ->
+                delegate?.onMessageReceived(
+                    structured.copy(
+                        sender = delegate?.getPeerNickname(peerID) ?: structured.sender,
+                        senderPeerID = peerID,
+                        timestamp = Date(packet.timestamp.toLong())
+                    )
+                )
+                return
+            }
+
             // Try file packet first (voice, image, etc.) and log outcome for FILE_TRANSFER
             val isFileTransfer = com.eazychat.app.protocol.MessageType.fromValue(packet.type) == com.eazychat.app.protocol.MessageType.FILE_TRANSFER
             val file = com.eazychat.app.model.BitchatFilePacket.decode(packet.payload)

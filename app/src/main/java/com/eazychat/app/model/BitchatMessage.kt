@@ -73,6 +73,20 @@ data class BitchatMessage(
 ) : Parcelable {
 
     /**
+     * Wrap [toBinaryPayload] with a marker byte for structured broadcasts (channel / mentions).
+     *
+     * Plain chat text is still sent as raw UTF-8, which never starts with the NUL marker, so a
+     * receiver can tell the two wire formats apart without ambiguity.
+     */
+    fun toStructuredPayload(): ByteArray? {
+        val binary = toBinaryPayload() ?: return null
+        return ByteArray(binary.size + 1).also { payload ->
+            payload[0] = STRUCTURED_PAYLOAD_MARKER
+            System.arraycopy(binary, 0, payload, 1, binary.size)
+        }
+    }
+
+    /**
      * Convert message to binary payload format - exactly same as iOS version
      */
     fun toBinaryPayload(): ByteArray? {
@@ -172,6 +186,18 @@ data class BitchatMessage(
     }
 
     companion object {
+        /** First byte of a [toStructuredPayload] payload; plain UTF-8 chat text never starts with NUL. */
+        private const val STRUCTURED_PAYLOAD_MARKER: Byte = 0x00
+
+        /**
+         * Parse a structured broadcast payload (see [toStructuredPayload]). Returns null for
+         * plain text payloads so the caller can fall back to raw UTF-8 decoding.
+         */
+        fun fromStructuredPayload(data: ByteArray): BitchatMessage? {
+            if (data.size < 14 || data[0] != STRUCTURED_PAYLOAD_MARKER) return null
+            return fromBinaryPayload(data.copyOfRange(1, data.size))
+        }
+
         /**
          * Parse message from binary payload - exactly same logic as iOS version
          */
