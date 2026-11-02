@@ -7,6 +7,7 @@ import com.eazychat.app.protocol.BitchatPacket
 import com.eazychat.app.util.toHexString
 import kotlinx.coroutines.*
 import kotlin.random.Random
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Centralized packet relay management
@@ -17,9 +18,15 @@ import kotlin.random.Random
 class PacketRelayManager(private val myPeerID: String) {
     companion object {
         private const val TAG = "PacketRelayManager"
+        private const val RELAYED_PACKET_TTL_MS = 300_000L // 5 minutes, same window as message replay protection
+        private const val MAX_RELAYED_PACKETS = 10_000
     }
     
     private fun isRelayEnabled(): Boolean = true
+
+    // Content identity of packets we already forwarded, to avoid duplicate forwarding
+    // when the same broadcast arrives through several neighbors.
+    private val relayedPacketIds = ConcurrentHashMap<String, Long>()
 
     // Logging moved to BluetoothPacketBroadcaster per actual transmission target
     
@@ -56,6 +63,15 @@ class PacketRelayManager(private val myPeerID: String) {
             Log.d(TAG, "TTL expired, not relaying packet")
             return
         }
+
+        // Skip packets already forwarded by us, even if they arrive through another neighbor.
+        // Identity excludes TTL so the same content with different hop counts deduplicates.
+        cleanupRelayedPacketsIfNeeded()
+        val packetId = packetIdentity(packet)
+        if (relayedPacketIds.containsKey(packetId)) {
+            Log.d(TAG, "Packet already relayed, skipping duplicate forward (type ${packet.type})")
+            return
+        }
         
         // Decrement TTL by 1
         val relayPacket = packet.copy(ttl = (packet.ttl - 1u).toUByte())
@@ -65,6 +81,7 @@ class PacketRelayManager(private val myPeerID: String) {
         val shouldRelay = isRelayEnabled() && shouldRelayPacket(relayPacket, peerID)
         
         if (shouldRelay) {
+            relayedPacketIds[packetId] = System.currentTimeMillis()
             relayPacket(RoutedPacket(relayPacket, peerID, routed.relayAddress))
         } else {
             Log.d(TAG, "Relay decision: NOT relaying packet type ${packet.type}")
@@ -113,18 +130,42 @@ class PacketRelayManager(private val myPeerID: String) {
         }
         
         // Apply adaptive relay probability based on network size
-        val relayProb = when {
-            networkSize <= 10 -> 1.0    // Always relay in small networks
-            networkSize <= 30 -> 0.85   // High probability for medium networks
-            networkSize <= 50 -> 0.7    // Moderate probability
-            networkSize <= 100 -> 0.55  // Lower probability for large networks
-            else -> 0.4                 // Lowest probability for very large networks
-        }
+        val relayProb = relayProbabilityForNetworkSize(networkSize)
         
         val shouldRelay = Random.nextDouble() < relayProb
         Log.d(TAG, "Network size: ${networkSize}, Relay probability: ${relayProb}, Decision: ${shouldRelay}")
         
         return shouldRelay
+    }
+
+    /**
+     * Relay probability by network size. Kept pure so the thresholds are unit-testable.
+     */
+    internal fun relayProbabilityForNetworkSize(networkSize: Int): Double = when {
+        networkSize <= 10 -> 1.0    // Always relay in small networks
+        networkSize <= 30 -> 0.85   // High probability for medium networks
+        networkSize <= 50 -> 0.7    // Moderate probability
+        networkSize <= 100 -> 0.55  // Lower probability for large networks
+        else -> 0.4                 // Lowest probability for very large networks
+    }
+
+    /**
+     * Content identity used for duplicate-forward suppression.
+     * TTL is intentionally excluded because it differs per hop while the content is the same.
+     */
+    private fun packetIdentity(packet: BitchatPacket): String {
+        return "${packet.timestamp}:${packet.senderID.toHexString()}:${packet.type}:" +
+            "${packet.recipientID?.toHexString() ?: "broadcast"}:${packet.payload.contentHashCode()}"
+    }
+
+    private fun cleanupRelayedPacketsIfNeeded() {
+        if (relayedPacketIds.size <= MAX_RELAYED_PACKETS) return
+        val cutoff = System.currentTimeMillis() - RELAYED_PACKET_TTL_MS
+        relayedPacketIds.entries.removeIf { it.value < cutoff }
+        if (relayedPacketIds.size > MAX_RELAYED_PACKETS) {
+            Log.w(TAG, "Relayed packet cache still above limit after expiry cleanup, clearing")
+            relayedPacketIds.clear()
+        }
     }
     
     /**
