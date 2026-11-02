@@ -229,6 +229,10 @@ class PacketProcessor(private val myPeerID: String) {
         
         val reassembledPacket = delegate?.handleFragment(routed.packet)
         if (reassembledPacket != null) {
+            // Reassembled packets keep the original signature: fragments carry the encoded
+            // packet bytes (signature included) and FragmentManager zeroes only the TTL.
+            // Re-entering handleReceivedPacket therefore re-runs security validation, so a
+            // tampered reassembly is dropped before display and before relay.
             Log.d(TAG, "Fragment reassembled, processing complete message")
             handleReceivedPacket(RoutedPacket(reassembledPacket, routed.peerID, routed.relayAddress))
         }
